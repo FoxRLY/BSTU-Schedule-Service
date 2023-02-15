@@ -49,7 +49,7 @@ class ScheduleParser:
         return header
     
     # Спарсить данные с полученного через заголовок расписания в заготовку
-    def parse_html_to_raw_data(self, html: str, header: dict, is_denominator: bool) -> list[list[str]]:
+    def parse_html_to_raw_data(self, html_text: str, header: dict, is_denominator: bool) -> list[list[str]]:
         soup = BeautifulSoup(html_text, "lxml")
         table_name = header["table_name"]
         week_status = "Знаменатель" if is_denominator else "Числитель"
@@ -62,8 +62,8 @@ class ScheduleParser:
             parsed_days.append(day_data)
         return parsed_days
 
-    # Используя заготовку, сделать json-строку
-    def parse_raw_data_to_json(self, raw_data: list[list[str]]) -> str:
+    # Используя заготовку, сделать Python объект с расписанием
+    def parse_raw_data_to_json(self, raw_data: list[list[str]]) -> dict:
         cab_regexp = r"(Г?УК\d?[ *[a-zA-Z0-9а-яА-Я_\(\)]*]*)|(КБ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([К|к]афедра[\s*ТМН]*)|(ЦВТ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([_|Баз\.]*[К|к]аф\.?[ *[a-zA-Z0-9а-яА-Я_\.]*]*)|(Дист\.)|(Ск\. маст\.)|(УТК)"
         teacher_regexp = r"[a-zA-Zа-яА-я]* [a-zA-Zа-яА-я\.]*"
         group_regexp = r"[а-яА-яa-zA-Z]*-\d*"
@@ -80,7 +80,7 @@ class ScheduleParser:
             schedule_type["type"] = "group"
             schedule_type["regexp"] = group_regexp
 
-        schedule = dict(table_name=header[0], week_status=header[1], day=[])
+        schedule = dict(week_status=header[1], day=[])
         for day in raw_data:
             # Словарь перевода сокращенного названия дня в нормальное
             day_map = {"Пн": "Понедельник", "Вт": "Вторник",
@@ -121,12 +121,23 @@ class ScheduleParser:
                     day_iter = itertools.chain([entry], day_iter)
                     day_dict["subjects"].append(subj_dict)
             schedule["day"].append(day_dict)
-        return json.dumps(schedule)
+        return schedule
 
-    # Парсинг html-строки с расписанием из GET запроса в json-строку
-    def parse(self, html_text: str, header: dict, is_denominator: bool) -> str:
+    # Парсинг html-строки с расписанием на неделю из GET запроса в Python объект
+    def parse(self, html_text: str, header: dict, is_denominator: bool) -> dict:
         return self.parse_raw_data_to_json(self.parse_html_to_raw_data(html_text, header, is_denominator))
-
+    
+    # Полный парсинг расписания из GET запросов в Python объект, готовый к вставке в базу данных
+    def parse_full(self, html_text: list[str], header: dict, is_denominator: list[bool]) -> dict:
+        if len(is_denominator) != len(html_text):
+            raise ValueError(f"Количество недель и их типов не совпадает: {len(html_text)} и {len(is_denominator)}")
+        full_schedule = dict()
+        full_schedule["table_name"] = header["table_name"]
+        full_schedule["weeks"] = []
+        for text, flag in zip(html_text, is_denominator):
+            full_schedule["weeks"].append(self.parse(text, header, flag))
+        return full_schedule
+        
 
 if __name__ == "__main__":
     base_url = "https://t.bstu.ru"
@@ -163,6 +174,6 @@ if __name__ == "__main__":
         exit()
     is_denominator = json_schedule_raw["result"]["week"]["is_denominator"]
     schedule_html = json_schedule_raw["result"]["html"]["week"]
-    json_schedule_str = parser.parse(schedule_html, header, is_denominator)
+    json_schedule_object = parser.parse_full([schedule_html], header, [is_denominator])
     with open("../test_trash/json_schedule.json", "w") as json_file:
-        json_file.write(json_schedule_str)
+        json_file.write(json.dumps(json_schedule_object))
