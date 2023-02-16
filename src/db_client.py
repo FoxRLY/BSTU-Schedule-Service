@@ -82,7 +82,8 @@ class DBClient:
 
     # Получить полное расписание группы
     def get_group_schedule_full(self, group_name: str) -> str:
-        find_result = self["current_buffer"]["groups"].find({"nameofgroup": group_name}, {"_id": 0})
+        query = {"nameofteacher": {"$regex": gruop_name, "$options": 'i'}}
+        find_result = self["current_buffer"]["groups"].find(query, {"_id": 0})
         find_result_list = list(map(dict, find_result))
         return json.dumps(find_result_list)
 
