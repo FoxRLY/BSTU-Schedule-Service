@@ -3,6 +3,7 @@ import json
 import re
 import itertools
 from download_html import ScheduleDownloader
+from dotenv import dotenv_values
 
 '''
 Как пользоваться:
@@ -140,9 +141,10 @@ class ScheduleParser:
         
 
 if __name__ == "__main__":
-    base_url = "https://t.bstu.ru"
-    teacher_list_url = "https://t.bstu.ru/raspisaniya/prepodavateli"
-    api_url = "https://t.bstu.ru/web/api/events"
+    env = dotenv_values("../.env")
+    base_url = env["SCHEDULE_BASE_URL"]
+    teacher_list_url = env["SCHEDULE_TEACHER_LIST"]
+    api_url = env["SCHEDULE_API_URL"]
     parser = ScheduleParser()
 
     # Скачиваем список преподов
