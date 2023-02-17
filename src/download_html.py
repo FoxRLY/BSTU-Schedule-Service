@@ -17,7 +17,7 @@ class ScheduleDownloader:
         Попытаться получить ответ с сервера
     """
 
-    def try_download_page(url: str) -> tuple[str, bool]:
+    def try_download_page(self, url: str) -> tuple[str, bool]:
         """Попытаться скачать страницу
 
         Скачивает html-страницу по указанному адресу и возвращает результат
@@ -35,7 +35,7 @@ class ScheduleDownloader:
         return ("", False)
     
 
-    def try_get_request(api_url: str, header: dict, week_index: int) -> tuple[str, bool]:
+    def try_get_request(self, api_url: str, header: dict, week_index: int) -> tuple[str, bool]:
         """Попытаться получить расписание с сервера БГТУ
         
         Делает GET запрос на сервер БГТУ через специальный api_url и возвращает
