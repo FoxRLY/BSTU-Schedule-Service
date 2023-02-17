@@ -10,11 +10,21 @@ import json
 В следующем буфере хранится подгружаемое расписание, которое затем становится текущим
 '''
 class DBClient:
-    def __init__(self):
+    def __init__(self, username: str, password: str):
         self.env = dotenv_values("../.env")
         self.client = pymongo.MongoClient("localhost",
-                                          username=self.env["MONGODB_USERNAME"],
-                                          password=self.env["MONGODB_PASSWORD"])
+                                          username=username,
+                                          password=password)
+        for i in range(timeout_counter:=3):
+            try:
+                self.client.list_database_names()
+                break
+            except pymongo.errors.ConnectionFailure:
+                print("Database connection failed")
+                if i == timeout_counter-1:
+                    print("Database connection counter exceeded. Closing service")
+                    exit()
+                
         #self.client.drop_database("schedule_db")       # PROD
         #self.db = self.client["schedule_db"]           # PROD
 
@@ -92,7 +102,9 @@ class DBClient:
     #    return "bruh" 
 
 if __name__ == "__main__":
-    client = DBClient()
+    env = dotenv_values("../.env")
+    client = DBClient(env["MONGODB_USERNAME"], env["MONGODB_PASSWORD"])
+
     prepod = dict()
     with open("../test_trash/json_schedule.json") as json_file:
         prepod = json.load(json_file)
