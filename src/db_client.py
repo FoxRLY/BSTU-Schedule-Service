@@ -17,13 +17,15 @@ class DBClient:
                                           password=password)
         for i in range(timeout_counter:=3):
             try:
+                print("Trying to connect to database...")
                 self.client.list_database_names()
+                print("Successfully connected to database")
                 break
-            except pymongo.errors.ConnectionFailure:
+            except pymongo.errors.ConnectionFailure as e:
                 print("Database connection failed")
                 if i == timeout_counter-1:
                     print("Database connection counter exceeded. Closing service")
-                    exit()
+                    raise e
                 
         #self.client.drop_database("schedule_db")       # PROD
         #self.db = self.client["schedule_db"]           # PROD
