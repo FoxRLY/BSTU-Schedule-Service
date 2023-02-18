@@ -28,7 +28,7 @@ class ScheduleParser:
 
     # Получить ссылки на всех преподов из страницы списка преподов
     def get_teacher_urls(self, list_html: str, base_url: str) -> list[str]:
-        soup = BeautifulSoup(html_text, "lxml")
+        soup = BeautifulSoup(list_html, "lxml")
         cab_regexp = r"(Г?УК\d?[ *[a-zA-Z0-9а-яА-Я_\(\)]*]*)|(КБ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([К|к]афедра[\s*ТМН]*)|(ЦВТ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([_|Баз\.]*[К|к]аф\.?[ *[a-zA-Z0-9а-яА-Я_\.]*]*)|(Дист\.)|(Ск\. маст\.)|(УТК)"
         teacher_urls_raw = soup.find_all("a", {"class": "teachers__item"})
         teacher_urls: list[str] = []
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     header = parser.get_schedule_header(html_text)
     
     # Скачиваем json-файл с расписанием на текущую неделю
-    schedule_week_current_json, status = ScheduleDownloader.try_get_request(api_url, header, 1)
+    schedule_week_current_json, status = ScheduleDownloader.try_get_request(api_url, header, 0)
     if not status:
         print("Не удалось скачать расписание через API")
         exit()
