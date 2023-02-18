@@ -27,11 +27,8 @@ class DBClient:
                     print("Database connection counter exceeded. Closing service")
                     raise e
                 
-        #self.client.drop_database("schedule_db")       # PROD
-        #self.db = self.client["schedule_db"]           # PROD
-
-        self.client.drop_database("schedule_test_db")   # TEST
-        self.db = self.client["schedule_test_db"]       # TEST
+        self.client.drop_database("schedule_db")
+        self.db = self.client["schedule_db"]
 
         self.buffers = dict(current_buffer = self.db["buffer_1"], next_buffer = self.db["buffer_2"], template = self.db["template"])
         self.buffers["template"].insert_one({"teachers": [], "groups": []})
