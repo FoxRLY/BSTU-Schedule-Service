@@ -1,5 +1,4 @@
 import pymongo
-from dotenv import dotenv_values
 from pymongo.collection import Collection
 import json
 
@@ -101,6 +100,7 @@ class DBClient:
     #    return "bruh" 
 
 if __name__ == "__main__":
+    from dotenv import dotenv_values
     env = dotenv_values("../.env")
     client = DBClient(env["MONGODB_USERNAME"], env["MONGODB_PASSWORD"])
 

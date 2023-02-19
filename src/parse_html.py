@@ -3,7 +3,6 @@ import json
 import re
 import itertools
 from download_html import ScheduleDownloader
-from dotenv import dotenv_values
 
 '''
 Как пользоваться:
@@ -141,6 +140,7 @@ class ScheduleParser:
         
 
 if __name__ == "__main__":
+    from dotenv import dotenv_values
     env = dotenv_values("../.env")
     base_url = env["SCHEDULE_BASE_URL"]
     teacher_list_url = env["SCHEDULE_TEACHER_LIST"]
