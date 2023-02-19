@@ -10,7 +10,6 @@ import json
 '''
 class DBClient:
     def __init__(self, username: str, password: str):
-        self.env = dotenv_values("../.env")
         self.client = pymongo.MongoClient("localhost",
                                           username=username,
                                           password=password)

@@ -6,6 +6,8 @@ import time
 from os import environ as env
 import json
 from aiohttp import web
+import traceback
+from contextlib import suppress
 
 class ExitFromServiceException(Exception):
     pass
@@ -23,8 +25,8 @@ class ScheduleService:
 
     async def update_timer(self, timer_period=100, number_of_tests=None):
         while True:
-            await self.update_schedule(test_number=number_of_tests)
             print("Update timer went up")
+            await self.update_schedule(test_number=number_of_tests)
             await asyncio.sleep(timer_period)
     
 
@@ -65,35 +67,30 @@ class ScheduleService:
     async def update_schedule(self, test_number=None):
 
         # 1) Скачать списки преподов и групп
-        
         # Список преподов в виде html
         teacher_list_html = await self._download_html_page(env.get("SCHEDULE_TEACHER_LIST_URL", "https://t.bstu.ru/raspisaniya/prepodavateli"), "Teacher", 3)
 
 
         # Список групп в виде html
         group_list_html = await self._download_html_page(env.get("SCHEDULE_GROUP_LIST_URL", "https://t.bstu.ru/raspisaniya/gruppy"), "Group", 3)
-        
+
 
         # 2) Спарсить все ссылки преподов и групп из скачанных списков
-        
         # Ссылки на преподов
         teacher_urls = self.parser.get_teacher_urls(teacher_list_html, env.get("SCHEDULE_BASE_URL", "https://t.bstu.ru"))
-
         # Ссылки на группы
         group_urls = self.parser.get_group_urls(group_list_html, env.get("SCHEDULE_BASE_URL", "https://t.bstu.ru"))
-
         if test_number is not None:
             teacher_urls = teacher_urls[0:test_number]
             group_urls = group_urls[0:test_number]
 
+
         # 3) Скачать все заголовки расписаний преподов и групп с помощью предыдущих ссылок
-        
         # Заголовки перподов
         teacher_headers_html = []
         for index, teacher_url in enumerate(teacher_urls):
             header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
             teacher_headers_html.append(header_html)
-
         # Заголовки групп
         group_headers_html = []
         for index, group_url in enumerate(group_urls):
@@ -102,7 +99,6 @@ class ScheduleService:
 
 
         # 4) Спарсить заголовки расписаний преподов и групп
-
         # Нормальные заголовки преподов
         start = time.perf_counter()
         teacher_headers = []
@@ -111,7 +107,6 @@ class ScheduleService:
             teacher_headers.append(header)
         end = time.perf_counter() - start
         print(f"Processed teacher headers in {end} seconds")
-
         # Нормальные заголовки групп
         start = time.perf_counter()
         group_headers = []
@@ -123,7 +118,6 @@ class ScheduleService:
 
 
         # 5) По заголовкам скачать расписания преподов и групп
-        
         # Скачиваем и форматируем расписания преподов
         teacher_schedules_html = []
         for header in teacher_headers:
@@ -136,7 +130,6 @@ class ScheduleService:
                 schedule_html["html"].append(response["result"]["html"]["week"])
                 schedule_html["is_denominator"].append(response["result"]["week"]["is_denominator"])
             teacher_schedules_html.append(schedule_html)
-
         # Скачиваем и форматируем расписания групп
         group_schedules_html = []
         for header in group_headers:
@@ -152,13 +145,10 @@ class ScheduleService:
                 
 
         # 6) Спарсить расписания преподов и групп в Python-объекты
-
         teacher_schedules = []
         for header, schedule_html in zip(teacher_headers, teacher_schedules_html):
             schedule = self.parser.parse_full(schedule_html["html"], header, schedule_html["is_denominator"])
             teacher_schedules.append(schedule)
-
-
         group_schedules = []
         for header, schedule_html in zip(group_headers, group_schedules_html):
             schedule = self.parser.parse_full(schedule_html["html"], header, schedule_html["is_denominator"])
@@ -166,10 +156,8 @@ class ScheduleService:
 
 
         # 7) Запихнуть раписания в базу данных
-
         self.db_client.update_teachers_many(teacher_schedules)
         self.db_client.update_groups_many(group_schedules)
-
         # 8) Применить изменения базы
         self.is_ready = False
         self.db_client.commit_updates()
@@ -177,7 +165,7 @@ class ScheduleService:
         
 
     async def run(self):
-        tasks = [self.update_timer(timer_period=self.schedule_update_period), self.answer_requests_test()]
+        tasks = [self.update_timer(timer_period=self.schedule_update_period)]
         for index in range(len(tasks)):
             tasks[index] = asyncio.create_task(tasks[index])
         gather = asyncio.gather(*tasks)
@@ -185,15 +173,14 @@ class ScheduleService:
             await gather
         except ExitFromServiceException:
             print("Service ended successfully!")
-        except Exception as e:
-            print(f"Service ended unexpectedly with this error: {e}")
-            raise e
+        except Exception:
+            print(f"Service ended unexpectedly with this error: {traceback.format_exc()}")
         finally:
             for task in tasks:
                 task.cancel()
 
     async def run_test(self):
-        tasks = [self.update_timer(timer_period=150, number_of_tests=5), self.answer_requests_test()]
+        tasks = [self.update_timer(timer_period=150, number_of_tests=5)]
         for index in range(len(tasks)):
             tasks[index] = asyncio.create_task(tasks[index])
         gather = asyncio.gather(*tasks)
@@ -201,9 +188,8 @@ class ScheduleService:
             await gather
         except ExitFromServiceException:
             print("Service ended successfully!")
-        except Exception as e:
-            print(f"Service ended unexpectedly with this error: {e}")
-            raise e
+        except Exception:
+            print(f"Service ended unexpectedly with this error: {traceback.format_exc()}")
         finally:
             for task in tasks:
                 task.cancel()
@@ -223,16 +209,60 @@ class ScheduleService:
             else:
                 await asyncio.sleep(1)
 
+    async def run_corutine(self, _app):
+       task = asyncio.create_task(self.run())
+       yield
+       task.cancel()
+       with suppress(asyncio.CancelledError):
+           await task
+
+    async def teacher_list_handler(self, request):
+        teacher_list_json = self.db_client.get_teacher_list()
+        return web.Response(status=200,text=teacher_list_json, content_type="text/json")
+    
+    async def teacher_schedule_full_handler(self, request):
+        teacher_name_json = dict()
+        try:
+            teacher_name_json = await request.json()
+        except:
+            raise web.HTTPBadRequest(reason="Bad json formatting")
+        if "nameofteacher" not in teacher_name_json.keys():
+            raise web.HTTPBadRequest(reason="Bad request")
+        teacher_schedule = self.db_client.get_teacher_schedule_full(teacher_name_json["nameofteacher"])
+        return web.Response(status=200, text=teacher_schedule, content_type="text/json")
+
+    async def group_list_handler(self, request):
+        group_list_json = self.db_client.get_group_list()
+        return web.Response(status=200,text=group_list_json, content_type="text/json")
+
+    async def group_schedule_full_handler(self, request):
+        group_name_json = dict()
+        try:
+            group_name_json = await request.json()
+        except:
+            raise web.HTTPBadRequest(reason="Bad json formatting")
+        if "nameofgroup" not in group_name_json.keys():
+            raise web.HTTPBadRequest(reason="Bad request")
+        group_schedule = self.db_client.get_group_schedule_full(group_name_json["nameofgroup"])
+        return web.Response(status=200, text=group_schedule, content_type="text/json")
 
 if __name__ == "__main__":
+    # Инициализируем сервис
     service = ScheduleService()
+    
+    # Инициализируем сервер
+    app = web.Application()
+    
+    # Пихаем сервис в сервер
+    app["state"] = {"service": service}
+    
+    # Запускаем сервис
+    app.cleanup_ctx.append(service.run_corutine)
 
-    #app = web.Application()
-
-    #app["state"] = {"service": service}
-    #app.add_routes([web.get("/teacher/list", )])
-
-    start = time.perf_counter()
-    asyncio.run(service.run_test())
-    result = time.perf_counter() - start
-    print(result)
+    # Добавляем роуты для сервера
+    app.add_routes([web.get("/teacher/list", service.teacher_list_handler),
+                    web.get("/teacher/schedule", service.teacher_schedule_full_handler),
+                    web.get("/group/list", service.group_list_handler),
+                    web.get("/group/schedule", service.group_schedule_full_handler)])
+    # Стартуем сервер
+    web.run_app(app)
