@@ -6,4 +6,5 @@
 
 ## Как запустить?
 1) Настроить .env файл по примеру
-2) Прописать `docker compose up`
+2) Прописать `docker compose build`
+3) Запустить через `docker compose up`
