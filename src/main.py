@@ -8,6 +8,8 @@ import json
 from aiohttp import web
 import traceback
 from contextlib import suppress
+import requests
+import aiohttp
 
 class ExitFromServiceException(Exception):
     pass
@@ -17,7 +19,7 @@ class ScheduleService:
         self.running = True
         self.is_ready = False
         self.schedule_update_period = int(env.get("SERVICE_UPDATE_TIMER_SECS", 10800))
-        self.db_client = DBClient(env.get("MONGODB_USERNAME", "foxrly"), env.get("MONGODB_PASSWORD", "1001"))
+        self.db_client = DBClient(env.get("DB_CONTAINER_NAME"), 27017, env.get("MONGODB_USERNAME", "foxrly"), env.get("MONGODB_PASSWORD", "1001"))
         self.downloader = ScheduleDownloader()
         self.parser = ScheduleParser()
         print("Service successfully initialized")
@@ -32,20 +34,42 @@ class ScheduleService:
 
     async def _download_html_page(self, url: str, url_name: str, timeout: int) -> str:
         html_page = ""
-        for i in range(timeout_counter:=3):
+        for i in range(timeout):
             html_page, status = self.downloader.try_download_page(url)
-            if not status and i >= timeout_counter-1:
+            if not status and i >= timeout-1:
                 print(f"{url_name} download timeout: error occurred multiple times on downloading")
                 raise RuntimeError(f"No internet connection or bad {url_name} URL")
-            elif not status and i < timeout_counter-1:
+            elif not status and i < timeout-1:
                 print(f"{url_name} download error, retrying...")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.01)
             else:
                 print(f"Successfully downloaded {url_name} page")
                 break
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.01)
         return html_page
-    
+
+    async def _dowload_html_pages(self, urls: list[str], timeout: int) -> list[str]:
+        downloaded_pages = []
+        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0"}
+        async with aiohttp.ClientSession() as session:
+            for number, url in enumerate(urls):
+                content = ""
+                for i in range(timeout):
+                    content = await session.get(url, headers=headers)
+                    if not content.ok and i >= timeout-1:
+                        print(f"{url} download timeout: error occurred multiple times on downloading")
+                        raise RuntimeError(f"No internet connection or bad {url} URL")
+                    elif not content.ok and i < timeout-1:
+                        print(f"{url} download error, retrying...")
+                        #await asyncio.sleep(0.1)
+                    else:
+                        print(f"Successfully downloaded {url} page| {number}")
+                        break
+                downloaded_pages.append(await content.text())
+                #await asyncio.sleep(0.1)
+        return downloaded_pages
+
+
 
     async def _get_server_response(self, header: dict, week_index: int, timeout: int) -> str:
         response = ""
@@ -56,11 +80,11 @@ class ScheduleService:
                 raise RuntimeError(f"No internet connection or bad API request with header {header}")
             elif not status and i < timeout_counter-1:
                 print(f"API request error, retrying...")
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.1)
             else:
                 print("Successfully got response from BSTU server")
                 break
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.1)
         return response
 
 
@@ -87,15 +111,18 @@ class ScheduleService:
 
         # 3) Скачать все заголовки расписаний преподов и групп с помощью предыдущих ссылок
         # Заголовки перподов
-        teacher_headers_html = []
-        for index, teacher_url in enumerate(teacher_urls):
-            header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
-            teacher_headers_html.append(header_html)
+
+        teacher_headers_html = await self._dowload_html_pages(teacher_urls, 3)
+        group_headers_html = await self._dowload_html_pages(group_urls, 3)
+        #teacher_headers_html = []
+        #for index, teacher_url in enumerate(teacher_urls):
+        #    header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
+        #    teacher_headers_html.append(header_html)
         # Заголовки групп
-        group_headers_html = []
-        for index, group_url in enumerate(group_urls):
-            header_html = await self._download_html_page(group_url, f"Group header {index}", 3)
-            group_headers_html.append(header_html)
+        #group_headers_html = []
+        #for index, group_url in enumerate(group_urls):
+        #    header_html = await self._download_html_page(group_url, f"Group header {index}", 3)
+        #    group_headers_html.append(header_html)
 
 
         # 4) Спарсить заголовки расписаний преподов и групп
@@ -120,7 +147,8 @@ class ScheduleService:
         # 5) По заголовкам скачать расписания преподов и групп
         # Скачиваем и форматируем расписания преподов
         teacher_schedules_html = []
-        for header in teacher_headers:
+        for number, header in enumerate(teacher_headers):
+            print("Teacher {number}")
             schedule_html = dict(html=[], is_denominator=[])
             for week_index in range(2):
                 json_response = await self._get_server_response(header, week_index, 3)
@@ -132,7 +160,8 @@ class ScheduleService:
             teacher_schedules_html.append(schedule_html)
         # Скачиваем и форматируем расписания групп
         group_schedules_html = []
-        for header in group_headers:
+        for number, header in enumerate(group_headers):
+            print("Group {number}")
             schedule_html = dict(html=[], is_denominator=[])
             for week_index in range(2):
                 json_response = await self._get_server_response(header, week_index, 3)

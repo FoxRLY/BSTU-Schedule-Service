@@ -1,19 +1,8 @@
 version: '3.9'
 
 services:
-    schedule:
-      build: .
-      ports:
-        - 8083:8080
-      environment:
-        - MONGODB_USERNAME=${MONGODB_USERNAME}
-        - MONGODB_PASSWORD=${MONGODB_PASSWORD}
-        - SERVICE_UPDATE_TIMER_SECS=${SERVICE_UPDATE_TIMER_SECS}
-        - SCHEDULE_BASE_URL=${SCHEDULE_BASE_URL}
-        - SCHEDULE_TEACHER_LIST_URL=${SCHEDULE_TEACHER_LIST_URL}
-        - SCHEDULE_GROUP_LIST_URL=${SCHEDULE_GROUP_LIST_URL}
-        - SCHEDULE_API_URL=${SCHEDULE_API_URL}
     mongo:
+      container_name: ${DB_CONTAINER_NAME}
       image: mongo:latest
       ports:
         - 27017:27017
@@ -22,3 +11,18 @@ services:
       environment:
         - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME}
         - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}
+    schedule:
+      container_name: ${PARSER_CONTAINER_NAME}
+      build: .
+      ports:
+        - 8083:8080
+      environment:
+        - DB_CONTAINER_NAME=${DB_CONTAINER_NAME}
+        - PARSER_CONTAINER_NAME=${PARSER_CONTAINER_NAME}
+        - MONGODB_USERNAME=${MONGODB_USERNAME}
+        - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+        - SERVICE_UPDATE_TIMER_SECS=${SERVICE_UPDATE_TIMER_SECS}
+        - SCHEDULE_BASE_URL=${SCHEDULE_BASE_URL}
+        - SCHEDULE_TEACHER_LIST_URL=${SCHEDULE_TEACHER_LIST_URL}
+        - SCHEDULE_GROUP_LIST_URL=${SCHEDULE_GROUP_LIST_URL}
+        - SCHEDULE_API_URL=${SCHEDULE_API_URL}

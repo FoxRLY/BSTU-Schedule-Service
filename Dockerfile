@@ -7,5 +7,5 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 COPY src/ ./app
 RUN pip install -r app/requirements.txt
 
-CMD ["python", "/app/main.py"]
+CMD ["python", "-u", "/app/main.py"]
 

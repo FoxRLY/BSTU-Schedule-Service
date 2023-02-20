@@ -9,8 +9,9 @@ import json
 В следующем буфере хранится подгружаемое расписание, которое затем становится текущим
 '''
 class DBClient:
-    def __init__(self, username: str, password: str):
-        self.client = pymongo.MongoClient("localhost",
+    def __init__(self, host: str, port: int, username: str, password: str):
+        pymongo.MongoClient()
+        self.client = pymongo.MongoClient(host, port,
                                           username=username,
                                           password=password)
         for i in range(timeout_counter:=3):
@@ -99,9 +100,8 @@ class DBClient:
     #    return "bruh" 
 
 if __name__ == "__main__":
-    from dotenv import dotenv_values
-    env = dotenv_values("../.env")
-    client = DBClient(env["MONGODB_USERNAME"], env["MONGODB_PASSWORD"])
+    from os import environ as env
+    client = DBClient("localhost", 27017, env.get("MONGODB_USERNAME"), env.get("MONGODB_PASSWORD"))
 
     prepod = dict()
     with open("../test_trash/json_schedule.json") as json_file:

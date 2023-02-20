@@ -28,7 +28,7 @@ class ScheduleDownloader:
         - url: str - адрес html страницы для скачивания
         """
 
-        agent = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+        agent = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0'}
         response = requests.get(url, headers=agent)
         if response.ok: 
             return (response.content.decode(encoding="utf-8"), True)
@@ -50,7 +50,7 @@ class ScheduleDownloader:
         - week_index: int - индекс недели. 0 - текущая, -1 - предыдущая, 1 и далее - следующие
         """
 
-        agent = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_10_1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.95 Safari/537.36'}
+        agent = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0'}
         response = requests.get(api_url 
                                 + "?entity=" + header["entity"] 
                                 + "&id=" + header["id"]
