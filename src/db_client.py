@@ -7,7 +7,7 @@
 применяются к следующему буферу, чтобы пользователь не видел полуобновленного расписания.
 Чтобы применить изменения, текущий буфер меняется местами со следующим.
 
-Пример использования:
+Example:
     from os import environ as env
     client = DBClient("localhost", 27017, env.get("MONGODB_USERNAME"), env.get("MONGODB_PASSWORD"))
 
@@ -31,28 +31,29 @@ class DBClient:
     
     Обертка над pymongo клиентом с возможностью атомарного обновления расписания.
 
-    Поля:
-    - host: str - ip или алиас, к которому будет подключаться клиент
-    - port: int - номер порта, на котором развернут сервер mongo
-    - username: str - имя пользователя mongodb
-    - password: str - пароль пользователя mongodb
+    Attributes:
+        client (pymongo.MongoClient):
+            Клиента для MongoDB
+        db (pymongo.Database):
+            База данных, в которой хранятся буферы
+        buffers (dict):
+            Буферы с расписанием
 
-    Методы:
-    - update_teachers_one(teacher_schedule) - обновить одного учителя
-    - update_teachers_many(teacher_schedules) - обновить список учителей
-    - update_groups_one(group_schedule) - обновить одну группу
-    - update_groups_many(group_schedules) - обновить список групп
-    - commit_updates() - применить обновления
-    - get_group_list() - получить список групп
-    - get_teacher_list() - получить список учителей
-    - get_group_schedule_full(group_name) - получить полное расписание группы
-    - get_teacher_schedule_full(teacher_name) - получить полное расписание учителя
     """
 
     def __init__(self, host: str, port: int, username: str, password: str):
-        """Конструктор клиента БД
+        """Конструктор
+
+        Args:
+            host (str):
+                Ip или алиас, к которому будет подключаться клиент
+            port (int):
+                Номер порта, на котором развернут сервер mongo
+            username (str):
+                Имя пользователя mongodb
+            password (str):
+                Пароль пользователя mongodb
         
-        Внутри себя использует pymongo с двумя одинаковыми буферами.
         """
 
         pymongo.MongoClient()
@@ -87,8 +88,10 @@ class DBClient:
         
         Приводит буфер к первоначальному состоянию с помощью шаблона
 
-        Аргументы:
-        - buffer: Collection - буфер, который будет очищен
+        Args:
+            buffer (Collection):
+                Буфер, который будет очищен
+
         """
 
         pipeline = [{"$match": {}},
@@ -102,8 +105,10 @@ class DBClient:
 
         Добавляет в следующий буфер запись об одном преподе
 
-        Аргументы:
-        - teacher_schedule: dict - новое расписание препода
+        Args:
+            teacher_schedule (dict):
+                Новое расписание препода
+
         """
 
         teacher_schedule["nameofteacher"] = teacher_schedule.pop("table_name")
@@ -115,8 +120,10 @@ class DBClient:
         
         Добавляет в следующий буфер много расписаний преподов
 
-        Аргументы:
-        - teacher_schedule: list[dict] - список расписаний преподов
+        Args:
+            teacher_schedule (list[dict]):
+                Список расписаний преподов
+
         """
 
         for schedule in teacher_schedules:
@@ -129,8 +136,10 @@ class DBClient:
 
         Добавляет расписание одной группы в следующий буфер
         
-        Аргументы:
-        - group_schedule: dict - новое расписание одной группы
+        Args:
+            group_schedule (dict):
+                Новое расписание одной группы
+        
         """
 
         group_schedule["nameofgroup"] = group_schedule.pop("table_name")
@@ -141,8 +150,10 @@ class DBClient:
 
         Добавляет расписание нескольких групп в следующий буфер
 
-        Аргументы:
-        - group_schedules: list[dict] - новые расписания нескольких групп
+        Args:
+            group_schedules (list[dict]):
+                Новые расписания нескольких групп
+        
         """
 
         for schedule in group_schedules:
@@ -154,6 +165,7 @@ class DBClient:
         
         Меняет местами текущий и следующий буфер, предоставляя пользователю
         доступ к обновлениям
+        
         """
 
         self.buffers["next_buffer"], self.buffers["current_buffer"] = self.buffers["current_buffer"], self.buffers["next_buffer"]
@@ -163,6 +175,7 @@ class DBClient:
         """Получить список преподов
 
         Возвращает список преподов в виде JSON документа
+        
         """
 
         find_result = self["current_buffer"]["teachers"].find({}, {"_id": 0, "nameofteacher": 1})
@@ -173,6 +186,7 @@ class DBClient:
         """Получить список групп
 
         Возвращает список групп в виде JSON документа
+        
         """
 
         find_result = self["current_buffer"]["groups"].find({}, {"_id": 0,"nameofgroup": 1})
@@ -184,8 +198,10 @@ class DBClient:
 
         Возвращает JSON с расписанием препода на две недели: эту и следующую
 
-        Аргументы:
-        - teacher_name: str - имя препода
+        Args:
+            teacher_name (str):
+                Имя препода
+        
         """
 
         query = {"nameofteacher": {"$regex": teacher_name, "$options": 'i'}}
@@ -198,8 +214,10 @@ class DBClient:
 
         Возвращает JSON с расписанием группы на две недели: эту и следующую
 
-        Аргументы:
-        - group_name: str - имя группы
+        Args:
+            group_name (str):
+                Имя группы
+        
         """
 
         query = {"nameofteacher": {"$regex": gruop_name, "$options": 'i'}}
