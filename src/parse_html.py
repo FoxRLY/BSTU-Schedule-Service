@@ -1,10 +1,8 @@
-from bs4 import BeautifulSoup
-import json
-import re
-import itertools
-from download_html import ScheduleDownloader
+"""Моудль парсера расписания
 
-'''
+Парсит списки преподов и групп в списки URL ссылок,
+создает заголовки для дальнейшего скачивания расписания по БГТУ API и 
+парсит расписания из полученных по API данных.
 Как пользоваться:
     1) Скачиваем html страницу со списком групп/преподов
     2) Парсим с него все ссылки на расписания
@@ -12,12 +10,36 @@ from download_html import ScheduleDownloader
     4) Из каждого расписания выуживаем заголовок: имя препода/название группы, entity, id и strategy
     5) По заголовку делаем GET запрос на сервер и получаем расписание на эту и следующую неделю
     6) Парсим полученные расписания в json
+"""
 
-'''
+from bs4 import BeautifulSoup
+import json
+import re
+import itertools
 
 class ScheduleParser:
-    # Получить ссылки на все группы из страницы списка групп
+    """Класс парсера расписания
+
+    Парсит списки преподов и групп, создает заголовки для API запросов и парсит расписания
+
+    """
+
     def get_group_urls(self, list_html: str, base_url: str) -> list[str]:
+        """Получить ссылки на все группы из страницы списка групп
+        
+        Парсит HTML-страницу со списком ссылок на группы
+
+        Args:
+            list_html (str):
+                HTML-страница со списком ссылок на группы
+            base_url (str):
+                Базовый URL для доавления к ссылкам на группы до полноценной ссылки
+
+        Returns:
+            Возвращает список полных URL на все группы
+
+        """
+
         soup = BeautifulSoup(list_html, "lxml")
         group_urls_raw = soup.find_all("a", {"class": "group__item"})
         group_urls: list[str] = []
@@ -25,8 +47,22 @@ class ScheduleParser:
             group_urls.append(base_url+group_url_raw["href"])
         return group_urls
 
-    # Получить ссылки на всех преподов из страницы списка преподов
     def get_teacher_urls(self, list_html: str, base_url: str) -> list[str]:
+        """Получить ссылки на всех преподов из страницы списка преподов
+        
+        Парсит HTML-страницу со списком ссылок на преподов
+
+        Args:
+            list_html (str):
+                HTML-страница со списком ссылок на преподов
+            base_url (str):
+                Базовый URL для доавления к ссылкам на преподов до полноценной ссылки
+
+        Returns:
+            Возвращает список полных URL на всех преподов
+
+        """
+
         soup = BeautifulSoup(list_html, "lxml")
         cab_regexp = r"(Г?УК\d?[ *[a-zA-Z0-9а-яА-Я_\(\)]*]*)|(КБ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([К|к]афедра[\s*ТМН]*)|(ЦВТ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([_|Баз\.]*[К|к]аф\.?[ *[a-zA-Z0-9а-яА-Я_\.]*]*)|(Дист\.)|(Ск\. маст\.)|(УТК)"
         teacher_urls_raw = soup.find_all("a", {"class": "teachers__item"})
@@ -36,9 +72,21 @@ class ScheduleParser:
                 print(teacher_url_raw.text.strip())
                 teacher_urls.append(base_url + teacher_url_raw["href"])
         return teacher_urls
-    
-    # Получить заголовок расписания со страницы расписания
+   
     def get_schedule_header(self, schedule_html: str) -> dict:
+        """Получить заголовок расписания со страницы расписания для БГТУ API
+
+        Работает со страницами как преподов, так и групп
+
+        Args:
+            schedule_html (str):
+                HTML-страница с нужными данными для создания заголовка запроса
+
+        Returns:
+            Возвращает заголовок для запроса к БГТУ API
+
+        """
+
         header = dict()
         soup = BeautifulSoup(schedule_html, "lxml")
         header["table_name"] = soup.find("h1", {"class": "title"}).text.strip()
@@ -48,8 +96,24 @@ class ScheduleParser:
         header["id"] = data["data-id"]
         return header
     
-    # Спарсить данные с полученного через заголовок расписания в заготовку
-    def parse_html_to_raw_data(self, html_text: str, header: dict, is_denominator: bool) -> list[list[str]]:
+    def _parse_html_to_raw_data(self, html_text: str, header: dict, is_denominator: bool) -> list[list[str]]:
+        """Спарсить данные с полученного через заголовок расписания в заготовку
+        
+        Получив HTML-код через API запрос, мы используем эту функцию, чтобы рудиментарно очистить
+        расписание от ненужных данных.
+
+        Args:
+            html_text (str):
+                Текст, полученный через API запрос к БГТУ серверу
+            header (dict):
+                Заголовок для API запроса, содержащий название расписания
+            is_denominator (bool):
+                True, если неделя - знаменатель, иначе False
+
+        Returns:
+            Возвращает грубую обработку данных для дальнейшего парсинга
+
+        """
         soup = BeautifulSoup(html_text, "lxml")
         table_name = header["table_name"]
         week_status = "Знаменатель" if is_denominator else "Числитель"
@@ -62,8 +126,21 @@ class ScheduleParser:
             parsed_days.append(day_data)
         return parsed_days
 
-    # Используя заготовку, сделать Python объект с расписанием
-    def parse_raw_data_to_json(self, raw_data: list[list[str]]) -> dict:
+    def _parse_raw_data_to_dict(self, raw_data: list[list[str]]) -> dict:
+        """Используя результат грубой обработки, получить Python-объект с рапсисанием
+
+        Использует замысловатый алгоритм, который из грубых данных создает словарь,
+        который будет можно перевести в JSON.
+
+        Args:
+            raw_data (list[list[str]]):
+                Грубые данные из функции _parse_html_to_raw_data
+
+        Returns:
+            Возращает словарь с расписанием
+
+        """
+
         cab_regexp = r"(Г?УК\d?[ *[a-zA-Z0-9а-яА-Я_\(\)]*]*)|(КБ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([К|к]афедра[\s*ТМН]*)|(ЦВТ[ *[a-zA-Z0-9а-яА-Я_]*]*)|([_|Баз\.]*[К|к]аф\.?[ *[a-zA-Z0-9а-яА-Я_\.]*]*)|(Дист\.)|(Ск\. маст\.)|(УТК)"
         teacher_regexp = r"[a-zA-Zа-яА-я]* [a-zA-Zа-яА-я\.]*"
         group_regexp = r"[а-яА-яa-zA-Z]*-\d*"
@@ -123,19 +200,55 @@ class ScheduleParser:
             schedule["day"].append(day_dict)
         return schedule
 
-    # Парсинг html-строки с расписанием на неделю из GET запроса в Python объект
-    def parse(self, html_text: str, header: dict, is_denominator: bool) -> dict:
-        return self.parse_raw_data_to_json(self.parse_html_to_raw_data(html_text, header, is_denominator))
+    def _parse(self, html_text: str, header: dict, is_denominator: bool) -> dict:
+        """Объединение функций грубой обработки расписания и переработки в словарь
+
+        Делает сначала грубую обработку, затем парсит в словарь некое расписание. Работает
+        как с группами, так и с преподами
+
+        Args:
+            html_text (str):
+                HTML-текст с расписанием
+            header (dict):
+                Заголовок, содержащий имя расписания
+            is_denominator (bool):
+                Флаг знаменателя
+
+        Returns:
+            Возвращает словарь с расписанием
+
+        """
+
+        return self._parse_raw_data_to_dict(self._parse_html_to_raw_data(html_text, header, is_denominator))
     
     # Полный парсинг расписания из GET запросов в Python объект, готовый к вставке в базу данных
     def parse_full(self, html_text: list[str], header: dict, is_denominator: list[bool]) -> dict:
+        """Полный парсинг нескольких расписаний с результатом, готовым к вставке в базу данных
+
+        Может парсить сразу несколько расписаний для одного препода или группы,
+        объединяя их в одну структуру. Эта структура согласуется с архитектурой БД,
+        потому результат парсинга может быть вставлен в нее без дополнительных проблем.
+
+        Args:
+            html_text (list[str]):
+                Список HTML-страниц с расписаниями на несколько недель
+            header (dict):
+                Заголовок с именем препода или группы
+            is_denominator (list[bool]):
+                Список флагов знаменателя
+
+        Returns:
+            Возвращает готовый для вставки в БД список расписаний для перпода или группы
+
+        """
+
         if len(is_denominator) != len(html_text):
             raise ValueError(f"Количество недель и их типов не совпадает: {len(html_text)} и {len(is_denominator)}")
         full_schedule = dict()
         full_schedule["table_name"] = header["table_name"]
         full_schedule["weeks"] = []
         for text, flag in zip(html_text, is_denominator):
-            full_schedule["weeks"].append(self.parse(text, header, flag))
+            full_schedule["weeks"].append(self._parse(text, header, flag))
         return full_schedule
         
 
