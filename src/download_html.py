@@ -58,11 +58,11 @@ class ScheduleDownloader:
         async with aiohttp.ClientSession() as client:
             response = await client.get(url, headers=self.headers)
             if response.status == 200:
-                return (response.text(), True)
+                return (await response.text(), True)
             return ("", False)
 
 
-    def try_get_request(self, api_url: str, header: dict, week_index: int) -> tuple[str, bool]:
+    async def try_get_request(self, api_url: str, header: dict, week_index: int) -> tuple[str, bool]:
         """Попытаться получить расписание с сервера БГТУ
         
         Делает GET запрос на сервер БГТУ через специальный api_url и возвращает
@@ -89,6 +89,6 @@ class ScheduleDownloader:
                                 + "&week=" + str(week_index)
                                 + "&device=" + header["device"], headers=self.headers) 
             if response.status == 200:
-                return (response.text(), True)
+                return (await response.text(), True)
             return ("", False)
 
