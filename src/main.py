@@ -8,7 +8,6 @@ import json
 from aiohttp import web
 import traceback
 from contextlib import suppress
-import requests
 import aiohttp
 
 class ExitFromServiceException(Exception):
@@ -20,7 +19,8 @@ class ScheduleService:
         self.is_ready = False
         self.schedule_update_period = int(env.get("SERVICE_UPDATE_TIMER_SECS", 10800))
         self.db_client = DBClient(env.get("DB_CONTAINER_NAME"), 27017, env.get("MONGODB_USERNAME", "foxrly"), env.get("MONGODB_PASSWORD", "1001"))
-        self.downloader = ScheduleDownloader()
+        agent = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0'}
+        self.downloader = ScheduleDownloader(agent)
         self.parser = ScheduleParser()
         print("Service successfully initialized")
 
@@ -35,50 +35,27 @@ class ScheduleService:
     async def _download_html_page(self, url: str, url_name: str, timeout: int) -> str:
         html_page = ""
         for i in range(timeout):
-            html_page, status = self.downloader.try_download_page(url)
+            html_page, status = await self.downloader.try_download_page(url)
             if not status and i >= timeout-1:
                 print(f"{url_name} download timeout: error occurred multiple times on downloading")
                 raise RuntimeError(f"No internet connection or bad {url_name} URL")
             elif not status and i < timeout-1:
                 print(f"{url_name} download error, retrying...")
-                await asyncio.sleep(0.01)
+                #await asyncio.sleep(0.01)
             else:
                 print(f"Successfully downloaded {url_name} page")
                 break
-        await asyncio.sleep(0.01)
+        #await asyncio.sleep(0.01)
         return html_page
-
-    async def _dowload_html_pages(self, urls: list[str], timeout: int) -> list[str]:
-        downloaded_pages = []
-        headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:101.0) Gecko/20100101 Firefox/101.0"}
-        async with aiohttp.ClientSession() as session:
-            for number, url in enumerate(urls):
-                content = ""
-                for i in range(timeout):
-                    content = await session.get(url, headers=headers)
-                    if not content.ok and i >= timeout-1:
-                        print(f"{url} download timeout: error occurred multiple times on downloading")
-                        raise RuntimeError(f"No internet connection or bad {url} URL")
-                    elif not content.ok and i < timeout-1:
-                        print(f"{url} download error, retrying...")
-                        #await asyncio.sleep(0.1)
-                    else:
-                        print(f"Successfully downloaded {url} page| {number}")
-                        break
-                downloaded_pages.append(await content.text())
-                #await asyncio.sleep(0.1)
-        return downloaded_pages
-
-
 
     async def _get_server_response(self, header: dict, week_index: int, timeout: int) -> str:
         response = ""
-        for i in range(timeout_counter:=3):
-            response, status = self.downloader.try_get_request(env.get("SCHEDULE_API_URL", "https://t.bstu.ru/web/api/events"), header, week_index)
-            if not status and i >= timeout_counter-1:
+        for i in range(timeout):
+            response, status = await self.downloader.try_get_request(env.get("SCHEDULE_API_URL", "https://t.bstu.ru/web/api/events"), header, week_index)
+            if not status and i >= timeout-1:
                 print(f"API request timeout: error occurred multiple times on requesting BSTU server")
                 raise RuntimeError(f"No internet connection or bad API request with header {header}")
-            elif not status and i < timeout_counter-1:
+            elif not status and i < timeout-1:
                 print(f"API request error, retrying...")
                 await asyncio.sleep(0.1)
             else:
@@ -112,17 +89,15 @@ class ScheduleService:
         # 3) Скачать все заголовки расписаний преподов и групп с помощью предыдущих ссылок
         # Заголовки перподов
 
-        teacher_headers_html = await self._dowload_html_pages(teacher_urls, 3)
-        group_headers_html = await self._dowload_html_pages(group_urls, 3)
-        #teacher_headers_html = []
-        #for index, teacher_url in enumerate(teacher_urls):
-        #    header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
-        #    teacher_headers_html.append(header_html)
+        teacher_headers_html = []
+        for index, teacher_url in enumerate(teacher_urls):
+            header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
+            teacher_headers_html.append(header_html)
         # Заголовки групп
-        #group_headers_html = []
-        #for index, group_url in enumerate(group_urls):
-        #    header_html = await self._download_html_page(group_url, f"Group header {index}", 3)
-        #    group_headers_html.append(header_html)
+        group_headers_html = []
+        for index, group_url in enumerate(group_urls):
+            header_html = await self._download_html_page(group_url, f"Group header {index}", 3)
+            group_headers_html.append(header_html)
 
 
         # 4) Спарсить заголовки расписаний преподов и групп
@@ -148,7 +123,7 @@ class ScheduleService:
         # Скачиваем и форматируем расписания преподов
         teacher_schedules_html = []
         for number, header in enumerate(teacher_headers):
-            print("Teacher {number}")
+            print(f"Teacher {number}")
             schedule_html = dict(html=[], is_denominator=[])
             for week_index in range(2):
                 json_response = await self._get_server_response(header, week_index, 3)
@@ -161,7 +136,7 @@ class ScheduleService:
         # Скачиваем и форматируем расписания групп
         group_schedules_html = []
         for number, header in enumerate(group_headers):
-            print("Group {number}")
+            print(f"Group {number}")
             schedule_html = dict(html=[], is_denominator=[])
             for week_index in range(2):
                 json_response = await self._get_server_response(header, week_index, 3)
@@ -222,24 +197,9 @@ class ScheduleService:
         finally:
             for task in tasks:
                 task.cancel()
-    
-
-    async def answer_requests_test(self):
-        while True:
-            if self.is_ready:
-                teacher_list_json = self.db_client.get_teacher_list()
-                teacher_list = json.loads(teacher_list_json)
-                for teacher_name in teacher_list:
-                    teacher_name = teacher_name["nameofteacher"]
-                    teacher_schedule = self.db_client.get_teacher_schedule_full(teacher_name)
-                    teacher_schedule = json.loads(teacher_schedule)
-                    print(teacher_schedule)
-                    await asyncio.sleep(1)
-            else:
-                await asyncio.sleep(1)
 
     async def run_corutine(self, _app):
-       task = asyncio.create_task(self.run())
+       task = asyncio.create_task(self.run_test())
        yield
        task.cancel()
        with suppress(asyncio.CancelledError):
