@@ -199,7 +199,7 @@ class ScheduleService:
                 task.cancel()
 
     async def run_corutine(self, _app):
-       task = asyncio.create_task(self.run_test())
+       task = asyncio.create_task(self.run())
        yield
        task.cancel()
        with suppress(asyncio.CancelledError):
