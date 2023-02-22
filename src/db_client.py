@@ -179,7 +179,8 @@ class DBClient:
         """
 
         find_result = self["current_buffer"]["teachers"].find({}, {"_id": 0, "nameofteacher": 1})
-        find_result_list = list(map(dict, find_result))
+        find_result_raw = list(map(dict, find_result))
+        find_result_list = dict(teacher_names = [name["nameofteacher"] for name in find_result_raw])
         return json.dumps(find_result_list)
     
     def get_group_list(self) -> str:
@@ -190,7 +191,8 @@ class DBClient:
         """
 
         find_result = self["current_buffer"]["groups"].find({}, {"_id": 0,"nameofgroup": 1})
-        find_result_list = list(map(dict, find_result))
+        find_result_raw = list(map(dict, find_result))
+        find_result_list = dict(group_names = [name["nameofgroup"] for name in find_result_raw])
         return json.dumps(find_result_list)
 
     def get_teacher_schedule_full(self, teacher_name: str) -> str:
@@ -205,8 +207,8 @@ class DBClient:
         """
 
         query = {"nameofteacher": {"$regex": teacher_name, "$options": 'i'}}
-        find_result = self["current_buffer"]["teachers"].find(query, {"_id": 0})
-        find_result_list = list(map(dict, find_result))
+        find_result = self["current_buffer"]["teachers"].find_one(query, {"_id": 0})
+        find_result_list = dict(find_result)
         return json.dumps(find_result_list)
 
     def get_group_schedule_full(self, group_name: str) -> str:
@@ -221,7 +223,7 @@ class DBClient:
         """
 
         query = {"nameofteacher": {"$regex": gruop_name, "$options": 'i'}}
-        find_result = self["current_buffer"]["groups"].find(query, {"_id": 0})
-        find_result_list = list(map(dict, find_result))
+        find_result = self["current_buffer"]["groups"].find_one(query, {"_id": 0})
+        find_result_list = dict(find_result)
         return json.dumps(find_result_list)
     
