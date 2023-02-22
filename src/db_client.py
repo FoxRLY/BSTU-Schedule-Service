@@ -94,9 +94,10 @@ class DBClient:
 
         """
 
+        buffer["teachers"].delete_many({})
+        buffer["groups"].delete_many({})
         pipeline = [{"$match": {}},
-                    {"$out": buffer.name}]
-        buffer.delete_many({})
+                    {"$out": buffer.full_name}]
         self["template"].aggregate(pipeline)
     
 
