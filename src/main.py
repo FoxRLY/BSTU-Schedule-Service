@@ -41,28 +41,31 @@ class ScheduleService:
                 raise RuntimeError(f"No internet connection or bad {url_name} URL")
             elif not status and i < timeout-1:
                 print(f"{url_name} download error, retrying...")
-                #await asyncio.sleep(0.01)
+                await asyncio.sleep(2)
             else:
                 print(f"Successfully downloaded {url_name} page")
                 break
-        #await asyncio.sleep(0.01)
+        await asyncio.sleep(2)
         return html_page
 
-    async def _get_server_response(self, header: dict, week_index: int, timeout: int) -> str:
+    async def _get_server_response(self, header: dict, week_indexes: list[int], timeout: int) -> list[str]:
+        result = []
         response = ""
-        for i in range(timeout):
-            response, status = await self.downloader.try_get_request(env.get("SCHEDULE_API_URL", "https://t.bstu.ru/web/api/events"), header, week_index)
-            if not status and i >= timeout-1:
-                print(f"API request timeout: error occurred multiple times on requesting BSTU server")
-                raise RuntimeError(f"No internet connection or bad API request with header {header}")
-            elif not status and i < timeout-1:
-                print(f"API request error, retrying...")
-                await asyncio.sleep(0.1)
-            else:
-                print("Successfully got response from BSTU server")
-                break
-        await asyncio.sleep(0.1)
-        return response
+        for week_index in week_indexes:
+            for i in range(timeout):
+                response, status = await self.downloader.try_get_request(env.get("SCHEDULE_API_URL", "https://t.bstu.ru/web/api/events"), header, week_index)
+                if not status and i >= timeout-1:
+                    print(f"API request timeout: error occurred multiple times on requesting BSTU server")
+                    raise RuntimeError(f"No internet connection or bad API request with header {header}")
+                elif not status and i < timeout-1:
+                    print(f"API request error, retrying...")
+                    await asyncio.sleep(2)
+                else:
+                    print("Successfully got response from BSTU server")
+                    break
+            await asyncio.sleep(2)
+            result.append(response)
+        return result
 
 
     async def update_schedule(self, test_number=None):
@@ -89,19 +92,29 @@ class ScheduleService:
         # 3) Скачать все заголовки расписаний преподов и групп с помощью предыдущих ссылок
         # Заголовки перподов
 
-        teacher_headers_html = []
-        for index, teacher_url in enumerate(teacher_urls):
-            header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
-            teacher_headers_html.append(header_html)
+        #teacher_headers_html = []
+        #for index, teacher_url in enumerate(teacher_urls):
+        #    header_html = await self._download_html_page(teacher_url, f"Teacher header {index})", 3)
+        #    teacher_headers_html.append(header_html)
+
+        tasks = [asyncio.create_task(self._download_html_page(teacher_url, f"Teacher header {index}", 1000)) for index, teacher_url in enumerate(teacher_urls)]
+        await asyncio.gather(*tasks)
+        teacher_headers_html = [task.result() for task in tasks]
+
         # Заголовки групп
-        group_headers_html = []
-        for index, group_url in enumerate(group_urls):
-            header_html = await self._download_html_page(group_url, f"Group header {index}", 3)
-            group_headers_html.append(header_html)
+        #group_headers_html = []
+        #for index, group_url in enumerate(group_urls):
+        #    header_html = await self._download_html_page(group_url, f"Group header {index}", 3)
+        #    group_headers_html.append(header_html)
+        
+        tasks = [asyncio.create_task(self._download_html_page(group_url, f"Group header {index}", 1000)) for index, group_url in enumerate(group_urls)]
+        await asyncio.gather(*tasks)
+        group_headers_html = [task.result() for task in tasks]
 
 
         # 4) Спарсить заголовки расписаний преподов и групп
         # Нормальные заголовки преподов
+        print("Started processing teacher headers...")
         start = time.perf_counter()
         teacher_headers = []
         for header_html in teacher_headers_html:
@@ -110,6 +123,7 @@ class ScheduleService:
         end = time.perf_counter() - start
         print(f"Processed teacher headers in {end} seconds")
         # Нормальные заголовки групп
+        print("Started processing group headers...")
         start = time.perf_counter()
         group_headers = []
         for header_html in group_headers_html:
@@ -121,31 +135,62 @@ class ScheduleService:
 
         # 5) По заголовкам скачать расписания преподов и групп
         # Скачиваем и форматируем расписания преподов
+
+        tasks = []
+        for header in teacher_headers:
+            tasks.append(asyncio.create_task(self._get_server_response(header, range(2), 1000)))
+        await asyncio.gather(*tasks)
+        json_responses = [task.result() for task in tasks]
         teacher_schedules_html = []
-        for number, header in enumerate(teacher_headers):
-            print(f"Teacher {number}")
+        for json_response in json_responses:
             schedule_html = dict(html=[], is_denominator=[])
-            for week_index in range(2):
-                json_response = await self._get_server_response(header, week_index, 3)
-                response = json.loads(json_response)
-                if not response["success"]:
-                    raise RuntimeError(f"Bad request with header {header}")
-                schedule_html["html"].append(response["result"]["html"]["week"])
-                schedule_html["is_denominator"].append(response["result"]["week"]["is_denominator"])
+            for week_json in json_response:
+                week = json.loads(week_json)
+                schedule_html["html"].append(week["result"]["html"]["week"])
+                schedule_html["is_denominator"].append(week["result"]["week"]["is_denominator"])
             teacher_schedules_html.append(schedule_html)
+
+
+        #teacher_schedules_html = []
+        #for number, header in enumerate(teacher_headers):
+        #    print(f"Teacher {number}")
+        #    schedule_html = dict(html=[], is_denominator=[])
+        #    for week_index in range(2):
+        #        json_response = await self._get_server_response(header, week_index, 1000)
+        #        response = json.loads(json_response)
+        #        if not response["success"]:
+        #            raise RuntimeError(f"Bad request with header {header}")
+        #        schedule_html["html"].append(response["result"]["html"]["week"])
+        #        schedule_html["is_denominator"].append(response["result"]["week"]["is_denominator"])
+        #    teacher_schedules_html.append(schedule_html)
         # Скачиваем и форматируем расписания групп
+        
+        tasks = []
+        for header in group_headers:
+            tasks.append(asyncio.create_task(self._get_server_response(header, range(2), 1000)))
+        await asyncio.gather(*tasks)
+        json_responses = [task.result() for task in tasks]
         group_schedules_html = []
-        for number, header in enumerate(group_headers):
-            print(f"Group {number}")
+        for json_response in json_responses:
             schedule_html = dict(html=[], is_denominator=[])
-            for week_index in range(2):
-                json_response = await self._get_server_response(header, week_index, 3)
-                response = json.loads(json_response)
-                if not response["success"]:
-                    raise RuntimeError(f"Bad request with header {header}")
-                schedule_html["html"].append(response["result"]["html"]["week"])
-                schedule_html["is_denominator"].append(response["result"]["week"]["is_denominator"])
+            for week_json in json_response:
+                week = json.loads(week_json)
+                schedule_html["html"].append(week["result"]["html"]["week"])
+                schedule_html["is_denominator"].append(week["result"]["week"]["is_denominator"])
             group_schedules_html.append(schedule_html)
+
+        #group_schedules_html = []
+        #for number, header in enumerate(group_headers):
+        #    print(f"Group {number}")
+        #    schedule_html = dict(html=[], is_denominator=[])
+        #    for week_index in range(2):
+        #        json_response = await self._get_server_response(header, week_index, 1000)
+        #        response = json.loads(json_response)
+        #        if not response["success"]:
+        #            raise RuntimeError(f"Bad request with header {header}")
+        #        schedule_html["html"].append(response["result"]["html"]["week"])
+        #        schedule_html["is_denominator"].append(response["result"]["week"]["is_denominator"])
+        #    group_schedules_html.append(schedule_html)
                 
 
         # 6) Спарсить расписания преподов и групп в Python-объекты
