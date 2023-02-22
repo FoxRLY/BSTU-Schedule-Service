@@ -208,8 +208,10 @@ class DBClient:
 
         query = {"nameofteacher": {"$regex": teacher_name, "$options": 'i'}}
         find_result = self["current_buffer"]["teachers"].find_one(query, {"_id": 0})
-        find_result_list = dict(find_result)
-        return json.dumps(find_result_list)
+        if find_result:
+            find_result_list = dict(find_result)
+            return json.dumps(find_result_list)
+        return ""
 
     def get_group_schedule_full(self, group_name: str) -> str:
         """Получить полное расписание группы
@@ -222,8 +224,10 @@ class DBClient:
         
         """
 
-        query = {"nameofteacher": {"$regex": group_name, "$options": 'i'}}
+        query = {"nameofgroup": {"$regex": group_name, "$options": 'i'}}
         find_result = self["current_buffer"]["groups"].find_one(query, {"_id": 0})
-        find_result_list = dict(find_result)
-        return json.dumps(find_result_list)
+        if find_result:
+            find_result_list = dict(find_result)
+            return json.dumps(find_result_list)
+        return ""
     
