@@ -251,34 +251,42 @@ class ScheduleService:
            await task
 
     async def teacher_list_handler(self, request):
+        if not self.is_ready:
+            raise web.HTTPNoContent(reason="Updating schedules, try again later")
         teacher_list_json = self.db_client.get_teacher_list()
         return web.Response(status=200,text=teacher_list_json, content_type="text/json")
     
     async def teacher_schedule_full_handler(self, request):
-        teacher_name_json = dict()
-        try:
-            teacher_name_json = await request.json()
-        except:
-            raise web.HTTPBadRequest(reason="Bad json formatting")
-        if "nameofteacher" not in teacher_name_json.keys():
-            raise web.HTTPBadRequest(reason="Bad request")
-        teacher_schedule = self.db_client.get_teacher_schedule_full(teacher_name_json["nameofteacher"])
-        return web.Response(status=200, text=teacher_schedule, content_type="text/json")
+        if not self.is_ready:
+            raise web.HTTPNoContent(reason="Updating schedules, try again later")
+        query = request.query
+        if teacher_name := query.get("name"):
+            teacher_schedule = self.db_client.get_teacher_schedule_full(teacher_name)
+            return web.Response(status=200, text=teacher_schedule, content_type="text/json")
+        raise web.HTTPBadRequest(reason="Bad request")
 
     async def group_list_handler(self, request):
+        if not self.is_ready:
+            raise web.HTTPNoContent(reason="Updating schedules, try again later")
         group_list_json = self.db_client.get_group_list()
         return web.Response(status=200,text=group_list_json, content_type="text/json")
 
-    async def group_schedule_full_handler(self, request):
-        group_name_json = dict()
-        try:
-            group_name_json = await request.json()
-        except:
-            raise web.HTTPBadRequest(reason="Bad json formatting")
-        if "nameofgroup" not in group_name_json.keys():
-            raise web.HTTPBadRequest(reason="Bad request")
-        group_schedule = self.db_client.get_group_schedule_full(group_name_json["nameofgroup"])
-        return web.Response(status=200, text=group_schedule, content_type="text/json")
+    async def group_schedule_full_handler(self, request: web.BaseRequest):
+        if not self.is_ready:
+            raise web.HTTPNoContent(reason="Updating schedules, try again later")
+        query = request.query
+        if group_name := query.get("name"):
+            group_schedule = self.db_client.get_group_schedule_full(group_name)
+            return web.Response(status=200, text=group_schedule, content_type="text/json")
+        raise web.HTTPBadRequest(reason="Bad request")
+
+
+async def bruh_handler(request: web.BaseRequest):
+    query = request.query
+    result = query.get("bruh")
+    if result:
+        return web.Response(text=result)
+    return web.HTTPBadRequest()
 
 if __name__ == "__main__":
     # Инициализируем сервис
@@ -297,6 +305,7 @@ if __name__ == "__main__":
     app.add_routes([web.get("/teacher/list", service.teacher_list_handler),
                     web.get("/teacher/schedule", service.teacher_schedule_full_handler),
                     web.get("/group/list", service.group_list_handler),
-                    web.get("/group/schedule", service.group_schedule_full_handler)])
+                    web.get("/group/schedule", service.group_schedule_full_handler),
+                    web.get("/bruh", bruh_handler)])
     # Стартуем сервер
     web.run_app(app)
