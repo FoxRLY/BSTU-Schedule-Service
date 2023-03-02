@@ -281,13 +281,6 @@ class ScheduleService:
         raise web.HTTPBadRequest(reason="Bad request")
 
 
-async def bruh_handler(request: web.BaseRequest):
-    query = request.query
-    result = query.get("bruh")
-    if result:
-        return web.Response(text=result)
-    return web.HTTPBadRequest()
-
 if __name__ == "__main__":
     # Инициализируем сервис
     service = ScheduleService()
@@ -305,7 +298,6 @@ if __name__ == "__main__":
     app.add_routes([web.get("/teacher/list", service.teacher_list_handler),
                     web.get("/teacher/schedule", service.teacher_schedule_full_handler),
                     web.get("/group/list", service.group_list_handler),
-                    web.get("/group/schedule", service.group_schedule_full_handler),
-                    web.get("/bruh", bruh_handler)])
+                    web.get("/group/schedule", service.group_schedule_full_handler)])
     # Стартуем сервер
     web.run_app(app)
