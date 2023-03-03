@@ -56,11 +56,13 @@ class ScheduleDownloader:
         """
 
         async with aiohttp.ClientSession() as client:
-            response = await client.get(url, headers=self.headers)
-            if response.status == 200:
-                return (await response.text(), True)
-            return ("", False)
-
+            try:
+                response = await client.get(url, headers=self.headers)
+                if response.status == 200:
+                    return (await response.text(), True)
+                return ("", False)
+            except:
+                return ("", False)
 
     async def try_get_request(self, api_url: str, header: dict, week_index: int) -> tuple[str, bool]:
         """Попытаться получить расписание с сервера БГТУ
@@ -83,12 +85,14 @@ class ScheduleDownloader:
         """
 
         async with aiohttp.ClientSession() as client:
-            response = await client.get(api_url 
-                                + "?entity=" + header["entity"] 
-                                + "&id=" + header["id"]
-                                + "&week=" + str(week_index)
-                                + "&device=" + header["device"], headers=self.headers) 
-            if response.status == 200:
-                return (await response.text(), True)
-            return ("", False)
-
+            try:
+                response = await client.get(api_url 
+                                    + "?entity=" + header["entity"] 
+                                    + "&id=" + header["id"]
+                                    + "&week=" + str(week_index)
+                                    + "&device=" + header["device"], headers=self.headers) 
+                if response.status == 200:
+                    return (await response.text(), True)
+                return ("", False)
+            except:
+                return ("", False)
