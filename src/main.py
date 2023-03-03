@@ -48,16 +48,17 @@ class ScheduleService:
         await asyncio.sleep(2)
         return html_page
 
-    async def _get_server_response(self, header: dict, week_indexes: list[int], timeout: int) -> list[str]:
+    async def _get_server_response(self, header: dict, week_indexes: list[int], timeout: int) -> list[dict]:
         result = []
         response = ""
         for week_index in week_indexes:
             for i in range(timeout):
                 response, status = await self.downloader.try_get_request(env.get("SCHEDULE_API_URL", "https://t.bstu.ru/web/api/events"), header, week_index)
-                if not status and i >= timeout-1:
+                response = json.loads(response)
+                if (not status or not response["success"]) and i >= timeout-1:
                     print(f"API request timeout: error occurred multiple times on requesting BSTU server")
                     raise RuntimeError(f"No internet connection or bad API request with header {header}")
-                elif not status and i < timeout-1:
+                elif (not status or not response["success"]) and i < timeout-1:
                     print(f"API request error, retrying...")
                     await asyncio.sleep(2)
                 else:
@@ -120,6 +121,7 @@ class ScheduleService:
         for header_html in teacher_headers_html:
             header = self.parser.get_schedule_header(header_html)
             teacher_headers.append(header)
+            await asyncio.sleep(0.001)
         end = time.perf_counter() - start
         print(f"Processed teacher headers in {end} seconds")
         # Нормальные заголовки групп
@@ -129,6 +131,7 @@ class ScheduleService:
         for header_html in group_headers_html:
             header = self.parser.get_schedule_header(header_html)
             group_headers.append(header)
+            await asyncio.sleep(0.001)
         end = time.perf_counter() - start
         print(f"Processed group headers in {end} seconds")
 
@@ -144,10 +147,10 @@ class ScheduleService:
         teacher_schedules_html = []
         for json_response in json_responses:
             schedule_html = dict(html=[], is_denominator=[])
-            for week_json in json_response:
-                week = json.loads(week_json)
+            for week in json_response:
                 schedule_html["html"].append(week["result"]["html"]["week"])
                 schedule_html["is_denominator"].append(week["result"]["week"]["is_denominator"])
+            await asyncio.sleep(0.001)
             teacher_schedules_html.append(schedule_html)
 
 
@@ -173,10 +176,10 @@ class ScheduleService:
         group_schedules_html = []
         for json_response in json_responses:
             schedule_html = dict(html=[], is_denominator=[])
-            for week_json in json_response:
-                week = json.loads(week_json)
+            for week in json_response:
                 schedule_html["html"].append(week["result"]["html"]["week"])
                 schedule_html["is_denominator"].append(week["result"]["week"]["is_denominator"])
+            await asyncio.sleep(0.001)
             group_schedules_html.append(schedule_html)
 
         #group_schedules_html = []
@@ -198,18 +201,24 @@ class ScheduleService:
         for header, schedule_html in zip(teacher_headers, teacher_schedules_html):
             schedule = self.parser.parse_full(schedule_html["html"], header, schedule_html["is_denominator"])
             teacher_schedules.append(schedule)
+            await asyncio.sleep(0.001)
         group_schedules = []
         for header, schedule_html in zip(group_headers, group_schedules_html):
             schedule = self.parser.parse_full(schedule_html["html"], header, schedule_html["is_denominator"])
             group_schedules.append(schedule)
+            await asyncio.sleep(0.001)
 
 
         # 7) Запихнуть раписания в базу данных
+        await asyncio.sleep(0.001)
         self.db_client.update_teachers_many(teacher_schedules)
+        await asyncio.sleep(0.001)
         self.db_client.update_groups_many(group_schedules)
         # 8) Применить изменения базы
         self.is_ready = False
+        await asyncio.sleep(0.001)
         self.db_client.commit_updates()
+        await asyncio.sleep(0.001)
         self.is_ready = True
         
 
